@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     libjpeg-dev \
     libfreetype6-dev \
     libzip-dev \
+    libonig-dev \
     libxml2-dev \
     libmagickwand-dev \
     && rm -rf /var/lib/apt/lists/*
