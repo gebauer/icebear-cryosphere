@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: icebear-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - icebear_source:/var/www/icebear
+      - icebear_data:/icebearstore
+      - icebear_backup:/icebear_backup
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-icebear}
+      - MYSQL_USER=${MYSQL_USER:-icebear_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - ICEBEAR_STORAGE_PATH=/icebearstore
+      - ICEBEAR_BACKUP_PATH=/icebear_backup
+      - ICEBEAR_VERSION=${ICEBEAR_VERSION:-1.10.2}
+      - ICEBEAR_SOURCE_TYPE=${ICEBEAR_SOURCE_TYPE:-official}
+      - ICEBEAR_GITHUB_REPO=${ICEBEAR_GITHUB_REPO:-}
+      - ICEBEAR_UPDATE_ON_START=${ICEBEAR_UPDATE_ON_START:-false}
+      - ICEBEAR_SOURCE_PATH=/var/www/icebear
+      - SERVER_HOSTNAME=${SERVER_HOSTNAME:-localhost}
+      - PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT:-512M}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - icebear-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: icebear-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-icebear}
+      - MYSQL_USER=${MYSQL_USER:-icebear_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - icebear-network
+
+volumes:
+  icebear_source:
+    driver: local
+  icebear_data:
+    driver: local
+  icebear_backup:
+    driver: local
+  mysql_data:
+    driver: local
+
+networks:
+  icebear-network:
+    driver: bridge
+

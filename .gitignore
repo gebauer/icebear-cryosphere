@@ -1,0 +1,32 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docker volumes and data
+data/
+icebearstore/
+backup/
+*.sql
+*.tar.gz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+

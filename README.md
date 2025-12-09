@@ -27,44 +27,218 @@ According to the official installation guide of IceBear: :contentReference[oaici
 - HTTPS support via built-in or easy-to-configure mechanism (Let’s Encrypt or external certs).  
 - (Optional) Backup/restore support, e.g. mounting an external storage for backups, or scheduled exports.  
 
-## Getting Started (Outline)
+## Quick Start with Docker Compose
 
-Here’s a rough outline of how to get started with IceBear-Cryosphere:
+### Prerequisites
 
-1. Clone this repository  
-2. Copy or template a configuration file (e.g. `.env` or `config.yml`) — specify:  
-   - Storage path(s) (for IceBear store, backups)  
-   - MySQL database credentials / settings  
-   - (Optional) Imaging integration details (if using Formulatrix)  
-   - Hostname / domain, HTTPS settings  
-3. Run `docker-compose up -d` (or equivalent) to start services: Apache/PHP, MySQL, IceBear web app, volume mounts  
-4. On first start, run IceBear’s equivalent of the install script: initialize database, configure storage, set permissions.  
-5. Access IceBear in browser via your configured domain (e.g. `https://icebear.example.org`) — finish setup (storage, admin user, optional imaging configuration).  
-6. (Optional) Configure automatic backups (via host-mounted volume, external backup service, etc.).  
+- Docker Engine 20.10+ and Docker Compose 2.0+
+- At least 4GB RAM (8GB+ recommended for production)
+- Sufficient disk space for your data (IceBear can handle terabytes of image data)
 
-## Configuration Variables (suggested)
+### Installation Steps
 
-Here are some configuration variables you might want to expose / template:
+1. **Clone this repository:**
+   ```bash
+   git clone <repository-url>
+   cd icebear-cryosphere
+   ```
 
+2. **Configure environment variables:**
+   ```bash
+   cp .env.example .env
+   # Edit .env and set your database passwords and configuration
+   ```
+
+3. **Start the services:**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Wait for initialization:**
+   - The containers will automatically download IceBear source (if using `official` source type)
+   - MySQL will initialize on first run
+   - IceBear will be available once containers are healthy
+
+5. **Access IceBear:**
+   - Open your browser to `http://localhost` (or your configured `SERVER_HOSTNAME`)
+   - Complete the IceBear installation wizard through the web interface
+   - Configure storage paths, admin user, and optional imaging device integration
+
+6. **Verify health:**
+   ```bash
+   docker-compose ps
+   # All services should show as "healthy"
+   ```
+
+### Updating IceBear Source
+
+The setup is designed to make updating IceBear easy:
+
+**Option 1: Update via environment variable (recommended)**
+1. Edit `.env` and set `ICEBEAR_VERSION` to the new version (e.g., `1.10.3`)
+2. Set `ICEBEAR_UPDATE_ON_START=true` (or run download script manually)
+3. Restart the web container:
+   ```bash
+   docker-compose restart web
+   ```
+
+**Option 2: Manual update script**
+```bash
+docker-compose exec web /usr/local/bin/download-icebear.sh
+docker-compose restart web
 ```
-ICEBEAR_STORAGE_PATH=/icebearstore
-ICEBEAR_BACKUP_PATH=/icebear_backup
-MYSQL_ROOT_PASSWORD=your_root_password
-MYSQL_DATABASE=icebear
-MYSQL_USER=icebear_user
-MYSQL_PASSWORD=secure_password
-SERVER_HOSTNAME=icebear.example.org
-ENABLE_HTTPS=true
-LETSENCRYPT_EMAIL=admin@example.org
-… (imager integration vars if needed) …
+
+**Option 3: Use GitHub source**
+1. Set `ICEBEAR_SOURCE_TYPE=github` in `.env`
+2. Set `ICEBEAR_GITHUB_REPO` to your repository URL
+3. Restart the web container
+
+**Option 4: Volume mount (for development)**
+1. Set `ICEBEAR_SOURCE_TYPE=volume` in `.env`
+2. Mount your local IceBear source directory in `docker-compose.yml`
+
+## Configuration Variables
+
+See `.env.example` for all available configuration options. Key variables:
+
+**Database:**
+- `MYSQL_ROOT_PASSWORD` - MySQL root password (required)
+- `MYSQL_DATABASE` - Database name (default: `icebear`)
+- `MYSQL_USER` - Database user (default: `icebear_user`)
+- `MYSQL_PASSWORD` - Database user password (required)
+
+**IceBear Source:**
+- `ICEBEAR_VERSION` - Version to download (default: `1.10.2`)
+- `ICEBEAR_SOURCE_TYPE` - Source type: `official`, `github`, or `volume` (default: `official`)
+- `ICEBEAR_GITHUB_REPO` - GitHub repository URL (if using GitHub source)
+- `ICEBEAR_UPDATE_ON_START` - Auto-update on container start (default: `false`)
+
+**Storage:**
+- `ICEBEAR_STORAGE_PATH` - Main storage path (default: `/icebearstore`)
+- `ICEBEAR_BACKUP_PATH` - Backup storage path (default: `/icebear_backup`)
+
+**Application:**
+- `SERVER_HOSTNAME` - Server hostname for Apache config (default: `localhost`)
+- `PHP_MEMORY_LIMIT` - PHP memory limit (default: `512M`)
+
+## Deployment with Coolify
+
+This Docker Compose setup is fully compatible with [Coolify](https://coolify.io), a self-hosted PaaS platform.
+
+### Deploying to Coolify
+
+1. **Install Coolify** (if not already installed):
+   ```bash
+   curl -fsSL https://cdn.coollabs.io/coolify/install.sh | sudo bash
+   ```
+
+2. **Create a new project** in Coolify dashboard
+
+3. **Add a new resource** using Docker Compose:
+   - Click "Create New Resource"
+   - Select "Docker Compose" build pack
+   - Connect your Git repository or upload the `docker-compose.yml` file
+   - Specify the path to `docker-compose.yml` (root if at repository root)
+
+4. **Configure environment variables** in Coolify:
+   - Navigate to your resource's "Environment Variables" section
+   - Add all variables from `.env.example`
+   - Set secure passwords and configuration values
+
+5. **Deploy:**
+   - Click "Deploy" in Coolify
+   - Monitor the deployment logs
+   - Health checks will automatically verify service status
+
+### Coolify-Specific Notes
+
+- Health checks are automatically configured and monitored by Coolify
+- Volumes are managed by Coolify's volume system
+- Ports are automatically exposed through Coolify's reverse proxy
+- HTTPS is handled by Coolify's Traefik instance (no additional configuration needed)
+- Updates can be triggered through Coolify's interface or by pushing to your repository
+
+## Volume Management and Backups
+
+### Persistent Volumes
+
+The setup creates the following named volumes:
+- `icebear_source` - IceBear application source code
+- `icebear_data` - Main data storage (`/icebearstore`)
+- `icebear_backup` - Backup storage (`/icebear_backup`)
+- `mysql_data` - MySQL database files
+
+### Backup Strategy
+
+**Database backup:**
+```bash
+docker-compose exec mysql mysqldump -u root -p${MYSQL_ROOT_PASSWORD} icebear > backup.sql
 ```
+
+**Volume backup:**
+```bash
+docker run --rm -v icebear_data:/data -v $(pwd):/backup alpine tar czf /backup/icebear_data_backup.tar.gz -C /data .
+```
+
+**Restore:**
+```bash
+# Database restore
+docker-compose exec -T mysql mysql -u root -p${MYSQL_ROOT_PASSWORD} icebear < backup.sql
+
+# Volume restore
+docker run --rm -v icebear_data:/data -v $(pwd):/backup alpine tar xzf /backup/icebear_data_backup.tar.gz -C /data
+```
+
+### Using Host Directories (Optional)
+
+To use host directories instead of named volumes, modify `docker-compose.yml`:
+
+```yaml
+volumes:
+  - ./icebear_source:/var/www/icebear
+  - ./data/icebearstore:/icebearstore
+  - ./data/backup:/icebear_backup
+```
+
+## Troubleshooting
+
+### Container won't start
+
+- Check logs: `docker-compose logs web` or `docker-compose logs mysql`
+- Verify environment variables are set correctly
+- Ensure ports 80 and 3306 are not already in use
+
+### IceBear source not downloading
+
+- Check internet connectivity from container: `docker-compose exec web curl -I https://www.icebear.fi`
+- Verify `ICEBEAR_VERSION` is correct (format: `1.10.2`)
+- Check download script logs: `docker-compose exec web cat /var/log/apache2/error.log`
+
+### Database connection errors
+
+- Verify MySQL is healthy: `docker-compose ps mysql`
+- Check database credentials in `.env`
+- Wait for MySQL to fully initialize (may take 30-60 seconds on first run)
+
+### Permission issues
+
+- Ensure storage directories are writable: `docker-compose exec web ls -la /icebearstore`
+- Check file ownership: `docker-compose exec web ls -la /var/www/icebear`
+
+### Health check failures
+
+- Verify web service is responding: `curl http://localhost`
+- Check Apache error logs: `docker-compose exec web tail -f /var/log/apache2/error.log`
+- Increase health check start period if initialization takes longer
 
 ## Notes / Warnings
 
-- IceBear can handle large amounts of image data — ensure you allocate sufficient disk space and configure regular backups.  
-- For production deployment — configure HTTPS properly, secure database credentials, and restrict access appropriately.  
-- If integrating imaging devices, ensure secure network connectivity and correct credentials.  
-- Monitor your server’s resource usage (disk, CPU, memory, network) — especially when dealing with many images or multiple users.  
+- **IceBear can handle large amounts of image data** — ensure you allocate sufficient disk space and configure regular backups
+- **For production deployment** — configure HTTPS properly (use Coolify's built-in HTTPS or configure SSL certificates), secure database credentials, and restrict access appropriately
+- **If integrating imaging devices** — ensure secure network connectivity and correct credentials
+- **Monitor resource usage** — disk, CPU, memory, network — especially when dealing with many images or multiple users
+- **PHP version requirement** — IceBear 1.10.2 requires PHP 8.1.0+ (included in this setup)
+- **Storage planning** — Plan for several terabytes if storing significant image data  
 
 ## License & Contribution
 
